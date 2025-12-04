@@ -4,6 +4,7 @@ import View from "../models/view.model.js";
 import Lead from "../models/lead.model.js";
 import Inquiry from "../models/inquiry.model.js";
 import Review from "../models/review.model.js";
+import bcrypt from "bcryptjs";
 
 // GET profile
 export const getProfile = async (req, res) => {
@@ -17,14 +18,33 @@ export const getProfile = async (req, res) => {
 // UPDATE profile
 export const updateProfile = async (req, res) => {
   try {
-    const updates = req.body;
+    const updates = { ...req.body };
     // prevent role/isVerified updates by user
     delete updates.role;
     delete updates.isVerified;
     delete updates.password; // password change should be separate
+    delete updates.email; // email change should be separate (if required add OTP)
 
     const updated = await User.findByIdAndUpdate(req.user.id, updates, { new: true }).select("-password");
     res.json({ message: "Profile updated", user: updated });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+};
+
+// CHANGE PASSWORD (PUT /api/user/me/change-password)
+export const changePassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword) return res.status(400).json({ message: "Missing fields" });
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Old password incorrect" });
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    res.json({ message: "Password changed" });
   } catch (err) { res.status(500).json({ message: err.message }); }
 };
 
@@ -37,7 +57,7 @@ export const saveProperty = async (req, res) => {
     const user = await User.findById(uid);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (user.savedProperties.includes(pid)) {
+    if (user.savedProperties.some(p => p.toString() === pid)) {
       return res.status(400).json({ message: "Property already saved" });
     }
 
@@ -122,7 +142,7 @@ export const getUserDashboard = async (req, res) => {
     const inquiriesCount = await Inquiry.countDocuments({ userId: uid });
     const reviewsCount = await Review.countDocuments({ userId: uid });
 
-    // brochure downloads tracked in View by property and via Lead, get downloads by user email/phone:
+    // brochure downloads tracked in Lead (by phone/email)
     const brochureDownloads = await Lead.countDocuments({ phone: user.mobile, action: "download_brochure" });
 
     res.json({

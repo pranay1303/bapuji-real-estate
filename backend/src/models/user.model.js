@@ -33,6 +33,8 @@ const userSchema = new mongoose.Schema(
 
     isVerified: { type: Boolean, default: false },
 
+    isActive: { type: Boolean, default: true }, // <-- new: used for block/unblock
+
     lastLogin: { type: Date, default: null },
   },
   { timestamps: true }

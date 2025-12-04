@@ -57,7 +57,6 @@ export const registerUser = async (req, res) => {
 // --------------------------
 // USER LOGIN
 // --------------------------
-//
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -69,6 +68,11 @@ export const loginUser = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user)
       return res.status(404).json({ message: "User not found" });
+
+    // Reject blocked users
+    if (user.isActive === false) {
+      return res.status(403).json({ message: "Account blocked. Contact support." });
+    }
 
     // Check password
     const isMatch = await bcrypt.compare(password, user.password);
