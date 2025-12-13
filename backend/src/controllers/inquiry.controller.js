@@ -61,3 +61,19 @@ export const listInquiries = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// New: close an inquiry (set status = "closed")
+export const closeInquiry = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const inquiry = await Inquiry.findById(id);
+    if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+
+    inquiry.status = "closed";
+    await inquiry.save();
+
+    res.json({ message: "Inquiry closed", inquiry });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

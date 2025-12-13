@@ -1,3 +1,4 @@
+// routes/property.route.js
 import express from "express";
 import multer from "multer";
 import { verifyToken, requireAdmin } from "../middleware/auth.middleware.js";
@@ -9,11 +10,13 @@ import {
   updateProperty,
   deleteProperty,
   uploadPropertyImages,
-  uploadBrochure
+  uploadBrochure,
+  deletePropertyImage,
+  deleteBrochure
 } from "../controllers/property.controller.js";
 
 const router = express.Router();
-const upload = multer(); // to handle file uploads
+const upload = multer({ storage: multer.memoryStorage() }); // to handle file uploads in memory
 
 // ===============================
 // PUBLIC ROUTES
@@ -32,22 +35,38 @@ router.delete("/:id", verifyToken, requireAdmin, deleteProperty);
 // FILE UPLOAD ROUTES
 // ===============================
 
-// 📌 Upload Multiple Images
+// Upload Multiple Images
 router.post(
   "/:id/images",
   verifyToken,
   requireAdmin,
-  upload.array("images"),
+  upload.array("images", 10), // allow up to 10 images at once
   uploadPropertyImages
 );
 
-// 📌 Upload Single Brochure (PDF)
+// Upload Single Brochure (PDF)
 router.post(
   "/:id/brochure",
   verifyToken,
   requireAdmin,
   upload.single("brochure"),
   uploadBrochure
+);
+
+// DELETE a specific image by index
+router.delete(
+  "/:id/images/:imageIndex",
+  verifyToken,
+  requireAdmin,
+  deletePropertyImage
+);
+
+// DELETE brochure
+router.delete(
+  "/:id/brochure",
+  verifyToken,
+  requireAdmin,
+  deleteBrochure
 );
 
 export default router;

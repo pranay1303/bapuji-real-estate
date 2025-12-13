@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const leadSchema = new mongoose.Schema({
   name: { type: String, default: "" },
-  phone: { type: String, required: true },
+  phone: { type: String, required: false, default: "" }, // <--- made optional
   email: { type: String, default: "" },
 
   property: {

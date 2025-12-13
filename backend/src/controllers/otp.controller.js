@@ -1,3 +1,4 @@
+// controllers/otp.controller.js
 import OTP from "../models/otp.model.js";
 import Property from "../models/property.model.js";
 import Lead from "../models/lead.model.js";
@@ -23,14 +24,15 @@ const transporter = nodemailer.createTransport({
 // ----------------------------------
 export const sendOtpEmail = async (req, res) => {
   try {
-    const { email, propertyId } = req.body;
+    const { email, propertyId, phone } = req.body;
     if (!email || !propertyId)
       return res.status(400).json({ message: "Email & propertyId required" });
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    await OTP.create({ email, code, property: propertyId, expiresAt });
+    // store phone with OTP if provided (optional)
+    await OTP.create({ email, phone: phone || "", code, property: propertyId, expiresAt });
 
     await transporter.sendMail({
       from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
@@ -52,10 +54,15 @@ export const sendOtpEmail = async (req, res) => {
 // ----------------------------------
 export const verifyOtpAndGetBrochure = async (req, res) => {
   try {
-    const { email, propertyId, code, name, phone } = req.body;
+    // quick debug log (remove or reduce level in production)
+    console.log('VERIFY OTP payload:', req.body);
+
+    const { email, propertyId, code, name } = req.body;
+    // Accept phone under either `phone` or `mobile` keys (defensive)
+    const rawPhone = req.body.phone ?? req.body.mobile ?? "";
 
     if (!email || !propertyId || !code)
-      return res.status(400).json({ message: "Missing fields" });
+      return res.status(400).json({ message: "Missing fields: email, propertyId and code are required" });
 
     const otp = await OTP.findOne({
       email, property: propertyId, code, used: false
@@ -78,17 +85,25 @@ export const verifyOtpAndGetBrochure = async (req, res) => {
       });
     }
 
-    // Create lead
+    // Normalize phone: trim and coerce to string; fallback to empty string
+    const safePhone = (typeof rawPhone === "string" ? rawPhone.trim() : String(rawPhone || ""));
+
+    if (!safePhone) {
+      // log so you can see how many leads miss phone; this is not fatal
+      console.warn(`verifyOtpAndGetBrochure: missing phone for email=${email} property=${propertyId}`);
+    }
+
+    // Create lead (phone is optional in schema now)
     const lead = await Lead.create({
       name: name || "",
-      phone: phone || "",
+      phone: safePhone,
       email,
       property: propertyId,
       action: "download_brochure",
       source: "email_otp"
     });
 
-    // Analytics
+    // Analytics: increment brochure downloads count
     await View.findOneAndUpdate(
       { property: propertyId },
       { $inc: { brochureDownloads: 1 } },
@@ -102,6 +117,12 @@ export const verifyOtpAndGetBrochure = async (req, res) => {
     });
 
   } catch (err) {
+    // If it's a Mongoose validation error, return 400 with details
+    if (err && err.name === "ValidationError") {
+      const messages = Object.values(err.errors).map(e => e.message).join("; ");
+      return res.status(400).json({ message: `Validation failed: ${messages}` });
+    }
+    console.error("verifyOtpAndGetBrochure error:", err);
     res.status(500).json({ message: err.message });
   }
 };

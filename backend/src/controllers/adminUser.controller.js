@@ -1,4 +1,5 @@
 import User from "../models/user.model.js";
+import Admin from "../models/admin.model.js";
 
 /**
  * GET /api/admin/users
@@ -45,6 +46,11 @@ export const getUserById = async (req, res) => {
   }
 };
 
+/**
+ * Update role of a user (and keep Admin collection in sync)
+ * If role -> 'admin' : ensure Admin doc exists with same _id (create or sync)
+ * If role != 'admin' : remove Admin doc for that id (optional / currently deleting)
+ */
 export const updateUserRole = async (req, res) => {
   try {
     const { role } = req.body;
@@ -52,8 +58,50 @@ export const updateUserRole = async (req, res) => {
     const allowed = ["user", "agent", "admin"];
     if (!allowed.includes(role)) return res.status(400).json({ message: "Invalid role" });
 
-    const updated = await User.findByIdAndUpdate(req.params.id, { role }, { new: true }).select("-password");
+    const userId = req.params.id;
+
+    // Update user role first
+    const updated = await User.findByIdAndUpdate(userId, { role }, { new: true }).select("-password");
     if (!updated) return res.status(404).json({ message: "User not found" });
+
+    // If promoted to admin, ensure Admin doc exists (with same _id)
+    if (role === "admin") {
+      try {
+        const existsAdmin = await Admin.findById(userId);
+        if (!existsAdmin) {
+          // create Admin doc reusing user's details; maintain same _id
+          await Admin.create({
+            _id: updated._id,
+            name: updated.name,
+            email: updated.email,
+            password: updated.password || "", // hashed password if present
+            role: "admin",
+            username: updated.username,
+            mobile: updated.mobile,
+            profileImage: updated.profileImage || "",
+            // add other admin fields/defaults if necessary
+          });
+        } else {
+          // sync some fields
+          existsAdmin.name = updated.name || existsAdmin.name;
+          existsAdmin.email = updated.email || existsAdmin.email;
+          existsAdmin.username = updated.username || existsAdmin.username;
+          existsAdmin.mobile = updated.mobile || existsAdmin.mobile;
+          await existsAdmin.save();
+        }
+      } catch (err) {
+        console.warn("Failed to create/sync Admin doc after promotion:", err);
+        // do not fail the whole request; user role was updated. return a warning.
+      }
+    } else {
+      // demoted from admin => remove Admin doc (optional)
+      try {
+        await Admin.findByIdAndDelete(userId);
+      } catch (err) {
+        console.warn("Failed to delete Admin doc after demotion:", err);
+      }
+    }
+
     res.json({ message: "Role updated", user: updated });
   } catch (err) {
     console.error("updateUserRole error:", err);
@@ -82,6 +130,14 @@ export const deleteUser = async (req, res) => {
   try {
     const deleted = await User.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: "User not found" });
+
+    // Also delete Admin doc if exists (cleanup)
+    try {
+      await Admin.findByIdAndDelete(req.params.id);
+    } catch (err) {
+      console.warn("Failed to delete corresponding Admin doc:", err);
+    }
+
     res.json({ message: "User deleted" });
   } catch (err) {
     console.error("deleteUser error:", err);
