@@ -3,6 +3,10 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import { Download, ChevronLeft, ChevronRight } from "lucide-react";
 
+// Force API base URL from backend environment
+const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
+
+
 /**
  * InquiriesAdmin.jsx
  * - Read admin JWT from localStorage or authToken prop.
@@ -109,14 +113,22 @@ export default function InquiriesAdmin({ baseUrl = "", authToken = "", pageSize 
     return h;
   }, [token]);
 
-  const buildUrl = useCallback((path, params = {}) => {
-    const base = baseUrl ? baseUrl.replace(/\/$/, "") : window.location.origin;
+  const buildUrl = useCallback(
+  (path, params = {}) => {
+    const base =
+      API_BASE ||
+      (baseUrl ? baseUrl.replace(/\/$/, "") : window.location.origin);
+
     const url = new URL(path, base);
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, v);
+      if (v !== undefined && v !== null && v !== "")
+        url.searchParams.set(k, v);
     });
     return url.toString();
-  }, [baseUrl]);
+  },
+  [baseUrl]
+);
+
 
   const tryParseJson = async (res) => {
     const ct = res.headers.get("content-type") || "";

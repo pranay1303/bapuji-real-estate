@@ -3,6 +3,10 @@ import { motion } from "framer-motion";
 import { Check, X, Download, Filter, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "../../hooks/useToast";
 
+// Force API base URL from backend environment
+const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
+
+
 /**
  * src/pages/admin/ReviewsAdmin.jsx
  * Admin page to list, filter, export and moderate reviews.
@@ -37,14 +41,22 @@ export default function ReviewsAdmin({ baseUrl = "" , pageSize = 20 }) {
     return h;
   }, [token]);
 
-  const buildUrl = useCallback((path, params = {}) => {
-    const base = baseUrl ? baseUrl.replace(/\/$/, "") : window.location.origin;
+  const buildUrl = useCallback(
+  (path, params = {}) => {
+    const base =
+      API_BASE ||
+      (baseUrl ? baseUrl.replace(/\/$/, "") : window.location.origin);
+
     const url = new URL(path, base);
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, v);
+      if (v !== undefined && v !== null && v !== "")
+        url.searchParams.set(k, v);
     });
     return url.toString();
-  }, [baseUrl]);
+  },
+  [baseUrl]
+);
+
 
   const tryParseJson = async (res) => {
     const ct = res.headers.get("content-type") || "";
