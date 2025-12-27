@@ -3,6 +3,10 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Download, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 
+// Force API base URL from backend environment
+const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
+
+
 /**
  * LeadsAdmin.jsx
  * - Reads admin JWT from localStorage key "token" or from authToken prop.
@@ -43,16 +47,22 @@ export default function LeadsAdmin({ baseUrl = "", authToken = "", pageSize = 20
   }, [token]);
 
   const buildUrl = useCallback(
-    (path, params = {}) => {
-      const base = baseUrl ? baseUrl.replace(/\/$/, "") : window.location.origin;
-      const url = new URL(path, base);
-      Object.entries(params).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, v);
-      });
-      return url.toString();
-    },
-    [baseUrl]
-  );
+  (path, params = {}) => {
+    // Always use backend API URL — never fallback to frontend origin in production
+    const base =
+      API_BASE ||
+      (baseUrl ? baseUrl.replace(/\/$/, "") : window.location.origin);
+
+    const url = new URL(path, base);
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "")
+        url.searchParams.set(k, v);
+    });
+    return url.toString();
+  },
+  [baseUrl]
+);
+
 
   const tryParseJson = async (res) => {
     const ct = res.headers.get("content-type") || "";
